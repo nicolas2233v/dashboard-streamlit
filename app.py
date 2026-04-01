@@ -408,28 +408,98 @@ def tab_historico_cliente(df, metrica):
 
 
 def tab_rentabilidad(df):
-    st.subheader("Rentabilidad")
 
-    ventas = df["Ventas"].sum()
-    costo = df["Costo Total"].sum()
-    margen = df["Margen $"].sum()
+    st.subheader("💰 Rentabilidad")
+
+    # -------------------------------
+    # SELECTOR DE MES (CLAVE)
+    # -------------------------------
+    meses = ordenar_meses(df["Mes"].dropna().unique().tolist())
+
+    if not meses:
+        st.warning("No hay meses disponibles")
+        return
+
+    mes_sel = st.selectbox("Seleccioná el mes a analizar", meses, key="rent_mes")
+
+    df_m = df[df["Mes"] == mes_sel].copy()
+
+    # -------------------------------
+    # TIPO DE ANÁLISIS
+    # -------------------------------
+    tipo = st.radio(
+        "Tipo de análisis",
+        ["General", "Zona", "Vendedor", "Cliente", "Artículo"],
+        horizontal=True
+    )
+
+    # -------------------------------
+    # KPIs
+    # -------------------------------
+    ventas = df_m["Ventas"].sum()
+    costo = df_m["Costo Total"].sum()
+    margen = df_m["Margen $"].sum()
     margen_pct = safe_div(margen * 100, ventas)
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Ventas", f"{ventas:,.2f}")
-    c2.metric("Costo Total", f"{costo:,.2f}")
-    c3.metric("Margen $", f"{margen:,.2f}")
-    c4.metric("Margen %", f"{margen_pct:,.2f}%")
+    c1.metric("Ventas", f"{ventas:,.0f}")
+    c2.metric("Costo", f"{costo:,.0f}")
+    c3.metric("Margen $", f"{margen:,.0f}")
+    c4.metric("Margen %", f"{margen_pct:,.1f}%")
 
-    por_cliente = df.groupby("Cliente", dropna=False)[["Ventas", "Costo Total", "Margen $"]].sum().reset_index()
-    por_cliente["Margen %"] = np.where(por_cliente["Ventas"] != 0, por_cliente["Margen $"] / por_cliente["Ventas"], 0)
-    st.markdown("### Rentabilidad por cliente")
-    st.dataframe(por_cliente.sort_values("Margen $", ascending=False), use_container_width=True)
+    st.divider()
 
-    por_articulo = df.groupby(["Artículo", "Familia Artículo"], dropna=False)[["Ventas", "Costo Total", "Margen $"]].sum().reset_index()
-    por_articulo["Margen %"] = np.where(por_articulo["Ventas"] != 0, por_articulo["Margen $"] / por_articulo["Ventas"], 0)
-    st.markdown("### Rentabilidad por artículo")
-    st.dataframe(por_articulo.sort_values("Margen $", ascending=False), use_container_width=True)
+    # -------------------------------
+    # ANÁLISIS DINÁMICO
+    # -------------------------------
+    if tipo == "General":
+        st.info("Vista general del mes seleccionado")
+
+    else:
+        campo = tipo
+
+        grp = df_m.groupby(campo, dropna=False)[["Ventas", "Costo Total", "Margen $"]].sum().reset_index()
+
+        grp["Margen %"] = np.where(
+            grp["Ventas"] != 0,
+            grp["Margen $"] / grp["Ventas"],
+            0
+        )
+
+        grp = grp.sort_values("Margen $", ascending=False)
+
+        st.markdown(f"### Rentabilidad por {campo}")
+        st.dataframe(grp, use_container_width=True)
+
+        # -------------------------------
+        # GRÁFICO
+        # -------------------------------
+        fig = px.bar(
+            grp.head(20),
+            x=campo,
+            y="Margen $",
+            title=f"Top {campo} por margen"
+        )
+
+        st.plotly_chart(fig, use_container_width=True, key=f"rent_{campo}")
+
+        # -------------------------------
+        # ALERTAS
+        # -------------------------------
+        st.markdown("### ⚠️ Alertas")
+
+        perdida = grp[grp["Margen $"] < 0]
+        bajo = grp[(grp["Margen %"] < 0.10) & (grp["Margen $"] > 0)]
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.markdown("#### 🔴 Pérdida")
+            st.dataframe(perdida.head(20), use_container_width=True)
+
+        with c2:
+            st.markdown("#### 🟡 Bajo margen (<10%)")
+            st.dataframe(bajo.head(20), use_container_width=True)
 
 
 def tab_alertas(df, metrica, periodo_a, periodo_b):
