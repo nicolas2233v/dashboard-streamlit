@@ -412,7 +412,7 @@ def tab_rentabilidad(df):
     st.subheader("💰 Rentabilidad")
 
     # -------------------------------
-    # SELECTOR DE MES (CLAVE)
+    # SELECTOR DE MES
     # -------------------------------
     meses = ordenar_meses(df["Mes"].dropna().unique().tolist())
 
@@ -422,7 +422,14 @@ def tab_rentabilidad(df):
 
     mes_sel = st.selectbox("Seleccioná el mes a analizar", meses, key="rent_mes")
 
+    # 🔥 FILTRADO REAL DEL MES
     df_m = df[df["Mes"] == mes_sel].copy()
+
+    # 🔥 RECALCULAR TODO DESPUÉS DEL FILTRO
+    df_m["Ventas"] = df_m["Precio Venta"]
+    df_m["Costo Total"] = df_m["Costo Unitario"] * df_m["Unidades"]
+    df_m["Margen $"] = df_m["Ventas"] - df_m["Costo Total"]
+    df_m["Margen %"] = np.where(df_m["Ventas"] != 0, df_m["Margen $"] / df_m["Ventas"], 0)
 
     # -------------------------------
     # TIPO DE ANÁLISIS
@@ -434,7 +441,7 @@ def tab_rentabilidad(df):
     )
 
     # -------------------------------
-    # KPIs
+    # KPIs (AHORA CORRECTOS)
     # -------------------------------
     ventas = df_m["Ventas"].sum()
     costo = df_m["Costo Total"].sum()
@@ -471,9 +478,7 @@ def tab_rentabilidad(df):
         st.markdown(f"### Rentabilidad por {campo}")
         st.dataframe(grp, use_container_width=True)
 
-        # -------------------------------
-        # GRÁFICO
-        # -------------------------------
+        # gráfico
         fig = px.bar(
             grp.head(20),
             x=campo,
@@ -481,11 +486,9 @@ def tab_rentabilidad(df):
             title=f"Top {campo} por margen"
         )
 
-        st.plotly_chart(fig, use_container_width=True, key=f"rent_{campo}")
+        st.plotly_chart(fig, use_container_width=True, key=f"rent_{campo}_{mes_sel}")
 
-        # -------------------------------
-        # ALERTAS
-        # -------------------------------
+        # alertas
         st.markdown("### ⚠️ Alertas")
 
         perdida = grp[grp["Margen $"] < 0]
